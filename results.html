@@ -46,6 +46,31 @@
   .sw.win{background:var(--gold);}
   .sw.reg{background:rgba(255,255,255,0.25);}
 
+  /* ---------- countdown / hero ring (وقت الانتظار قبل بدء التصويت) ---------- */
+  .stage-wrap{width:100%; display:flex; justify-content:center; padding: 12px 0;}
+  .stage{position:relative; flex-shrink:0;}
+  .ring-deco{position:absolute; inset:0; border-radius:50%; border:1px solid rgba(212,175,55,0.28); z-index:1;}
+  .ring-deco.inner{inset:15%; border-color:rgba(212,175,55,0.16);}
+  .center-plate{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    border-radius:50%;
+    background: radial-gradient(circle at 50% 42%, rgba(24,36,98,0.95) 0%, rgba(12,20,64,0.96) 68%, rgba(8,15,56,0.97) 100%);
+    border:1.5px solid rgba(212,175,55,0.5);
+    box-shadow: 0 0 0 7px rgba(212,175,55,0.07), 0 12px 32px rgba(0,0,0,0.5);
+    z-index:4;
+  }
+  .center-box{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:fit-content; max-width:58%; text-align:center; pointer-events:none; z-index:6;}
+  .cd-label{font-size:clamp(11px,1.9vmin,16px); color:var(--gold-soft); font-weight:600; margin-bottom:clamp(6px,1.2vh,12px);}
+  .cd-row{display:flex; align-items:baseline; justify-content:center; gap:clamp(6px,1.6vmin,14px);}
+  .cd-unit{display:flex; flex-direction:column; align-items:center; min-width:clamp(34px,7vmin,68px);}
+  .cd-unit .num{font-weight:800; font-size:clamp(20px,5.6vmin,54px); color:var(--gold); line-height:1; font-variant-numeric:tabular-nums; text-shadow:0 2px 14px rgba(212,175,55,0.35);}
+  .cd-unit .unit-label{font-size:clamp(9px,1.2vmin,12px); opacity:.8; margin-top:4px; font-weight:600;}
+  .cd-sep{font-size:clamp(16px,4.4vmin,42px); color:var(--gold); opacity:.55;}
+  .orbit-item{position:absolute; top:0; left:0; display:flex; flex-direction:column; align-items:center; will-change:transform; z-index:2;}
+  .photo-frame{border-radius:50%; overflow:hidden; border:2.5px solid var(--gold); box-shadow:0 0 0 4px rgba(212,175,55,0.12),0 4px 14px rgba(0,0,0,0.45); background:var(--navy);}
+  .photo-frame img{width:100%; height:100%; object-fit:cover; display:block;}
+  .cand-name{margin-top:6px; font-size:clamp(8px,1.1vmin,12px); font-weight:700; background:rgba(8,15,56,0.72); border:1px solid rgba(212,175,55,0.35); padding:2px 8px; border-radius:999px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; direction:ltr; text-align:center;}
+
   #resultsList{display:flex; flex-direction:column; gap:10px;}
   .result-row{
     position:relative;
@@ -113,15 +138,22 @@
     <span id="updatedLabel">آخر تحديث: --</span>
   </div>
 
-  <div id="waitBox" style="display:none; width:100%; text-align:center; padding:50px 0;">
-    <div style="font-size:15px; color:var(--gold-soft); margin-bottom:16px; font-weight:600;">التصويت يبدأ خلال</div>
-    <div style="display:flex; justify-content:center; gap:16px; align-items:baseline;">
-      <div style="text-align:center;"><span id="r-cd-hours" style="font-size:44px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;">--</span><div style="font-size:12px; opacity:.75; margin-top:4px;">ساعات</div></div>
-      <div style="font-size:34px; color:var(--gold); opacity:.6;">:</div>
-      <div style="text-align:center;"><span id="r-cd-mins" style="font-size:44px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;">--</span><div style="font-size:12px; opacity:.75; margin-top:4px;">دقائق</div></div>
-      <div style="font-size:34px; color:var(--gold); opacity:.6;">:</div>
-      <div style="text-align:center;"><span id="r-cd-secs" style="font-size:44px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;">--</span><div style="font-size:12px; opacity:.75; margin-top:4px;">ثواني</div></div>
-    </div>
+  <div id="waitBox" style="display:none; width:100%;">
+    <div class="stage-wrap"><div class="stage" id="stage">
+      <div class="ring-deco"></div>
+      <div class="ring-deco inner"></div>
+      <div class="center-plate" id="centerPlate"></div>
+      <div class="center-box" id="centerBox">
+        <div class="cd-label">التصويت يبدأ خلال</div>
+        <div class="cd-row">
+          <div class="cd-unit"><span class="num" id="cd-hours">--</span><span class="unit-label">ساعات</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="num" id="cd-mins">--</span><span class="unit-label">دقائق</span></div>
+          <div class="cd-sep">:</div>
+          <div class="cd-unit"><span class="num" id="cd-secs">--</span><span class="unit-label">ثواني</span></div>
+        </div>
+      </div>
+    </div></div>
   </div>
 
   <main>
@@ -136,7 +168,7 @@
 
 <script>
 const N8N_BASE = "https://mazoon1.abdulonline.online/webhook";
-const POLL_MS = 30000;
+const POLL_MS = 15000;
 
 let lastOrder = []; // array of candidate ids in last rendered order, for FLIP animation
 
@@ -214,11 +246,88 @@ function render(data){
 
 let votingOpenAtMs = null;
 let waitTickInterval = null;
+let ringAnimId = null;
+let ringItems = [];
+let ringDims = null;
+let RING_CANDS = [];
 function fmt2(n){ return String(n).padStart(2,'0'); }
+
+function buildRing(){
+  const stage = document.getElementById('stage');
+  stage.querySelectorAll('.orbit-item').forEach(e => e.remove());
+  ringItems = RING_CANDS.map((c, i) => {
+    const el = document.createElement('div');
+    el.className = 'orbit-item';
+    el.innerHTML = '<div class="photo-frame"><img src="' + c.photoUrl + '" alt="' + c.name + '" loading="lazy"></div>' +
+                   '<div class="cand-name">' + c.name + '</div>';
+    stage.appendChild(el);
+    return { el, angle: (i / RING_CANDS.length) * Math.PI * 2 };
+  });
+}
+
+function layoutRing(){
+  const stageWrap = document.querySelector('.stage-wrap');
+  const stage = document.getElementById('stage');
+  const centerBox = document.getElementById('centerBox');
+  const centerPlate = document.getElementById('centerPlate');
+  const wrapRect = stageWrap.getBoundingClientRect();
+  const vh = window.innerHeight;
+  const stageSize = Math.max(240, Math.min(wrapRect.width, vh * 0.55, 720));
+  stage.style.width = stageSize + 'px';
+  stage.style.height = stageSize + 'px';
+
+  const boxRect = centerBox.getBoundingClientRect();
+  const protectRadius = Math.sqrt(boxRect.width*boxRect.width + boxRect.height*boxRect.height)/2 + 16;
+  centerPlate.style.width = (protectRadius*2) + 'px';
+  centerPlate.style.height = (protectRadius*2) + 'px';
+
+  const N = Math.max(1, ringItems.length);
+  const TAG_RESERVE = 34, EDGE_PAD = 6, INNER_GAP = 14;
+  const outerLimit = stageSize/2 - EDGE_PAD;
+  let photoSize = Math.min(stageSize*0.15, 130);
+  let radius = Math.max(38, outerLimit - photoSize/2 - TAG_RESERVE);
+  const minInner = protectRadius + INNER_GAP;
+  if (radius - photoSize/2 < minInner){
+    photoSize = Math.max(30, outerLimit - TAG_RESERVE - minInner);
+    radius = minInner + photoSize/2;
+  }
+  let chord = 2*radius*Math.sin(Math.PI/N);
+  if (photoSize > chord*0.80){
+    photoSize = Math.max(28, chord*0.80);
+    radius = Math.max(minInner + photoSize/2, outerLimit - photoSize/2 - TAG_RESERVE);
+    chord = 2*radius*Math.sin(Math.PI/N);
+  }
+  const tagWidth = Math.max(photoSize*1.05, chord*0.98);
+  ringItems.forEach(item => {
+    item.photoSize = photoSize;
+    const frame = item.el.querySelector('.photo-frame');
+    frame.style.width = photoSize+'px'; frame.style.height = photoSize+'px';
+    item.el.querySelector('.cand-name').style.maxWidth = tagWidth+'px';
+  });
+  ringDims = { size: stageSize, radius, photoSize };
+}
+
+function animateRing(now){
+  if (!ringDims) { ringAnimId = requestAnimationFrame(animateRing); return; }
+  const period = 70000;
+  const rot = ((now % period)/period) * Math.PI*2;
+  const cx = ringDims.size/2, cy = ringDims.size/2;
+  ringItems.forEach(item => {
+    const a = item.angle + rot;
+    const x = cx + ringDims.radius*Math.cos(a);
+    const y = cy + ringDims.radius*Math.sin(a);
+    item.el.style.transform = 'translate(' + (x-item.photoSize/2) + 'px,' + (y-item.photoSize/2-8) + 'px)';
+  });
+  ringAnimId = requestAnimationFrame(animateRing);
+}
 
 function showWaitBox(){
   document.getElementById('waitBox').style.display = 'block';
   document.querySelector('main').style.display = 'none';
+  if (ringItems.length === 0 && RING_CANDS.length) buildRing();
+  layoutRing();
+  if (!ringAnimId) ringAnimId = requestAnimationFrame(animateRing);
+  window.addEventListener('resize', layoutRing);
   if (!waitTickInterval) waitTickInterval = setInterval(tickWaitCountdown, 1000);
   tickWaitCountdown();
 }
@@ -232,9 +341,9 @@ function tickWaitCountdown(){
   const diff = votingOpenAtMs - Date.now();
   if (diff <= 0){ hideWaitBox(); tick(); return; }
   const totalSeconds = Math.floor(diff/1000);
-  document.getElementById('r-cd-hours').textContent = fmt2(Math.floor(totalSeconds/3600));
-  document.getElementById('r-cd-mins').textContent = fmt2(Math.floor((totalSeconds%3600)/60));
-  document.getElementById('r-cd-secs').textContent = fmt2(totalSeconds%60);
+  document.getElementById('cd-hours').textContent = fmt2(Math.floor(totalSeconds/3600));
+  document.getElementById('cd-mins').textContent = fmt2(Math.floor((totalSeconds%3600)/60));
+  document.getElementById('cd-secs').textContent = fmt2(totalSeconds%60);
 }
 
 async function tick(){
@@ -242,6 +351,7 @@ async function tick(){
     const data = await fetchResults();
     votingOpenAtMs = data.votingOpenAt ? new Date(data.votingOpenAt).getTime() : null;
     if (votingOpenAtMs && Date.now() < votingOpenAtMs){
+      RING_CANDS = (data.results || []).map(c => ({ name: c.name, photoUrl: c.photoUrl }));
       showWaitBox();
     } else {
       hideWaitBox();
