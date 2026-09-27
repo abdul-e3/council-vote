@@ -79,7 +79,6 @@
 
   .r-info{position:relative; z-index:1; flex:1; min-width:0;}
   .r-name{font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .r-title{font-size:11px; color:var(--gold-soft); opacity:.85; font-weight:600; margin-top:1px;}
 
   .r-votes{
     position:relative; z-index:1; flex-shrink:0; font-weight:800; font-size:16px; color:var(--gold);
@@ -114,6 +113,17 @@
     <span id="updatedLabel">آخر تحديث: --</span>
   </div>
 
+  <div id="waitBox" style="display:none; width:100%; text-align:center; padding:50px 0;">
+    <div style="font-size:15px; color:var(--gold-soft); margin-bottom:16px; font-weight:600;">التصويت يبدأ خلال</div>
+    <div style="display:flex; justify-content:center; gap:16px; align-items:baseline;">
+      <div style="text-align:center;"><span id="r-cd-hours" style="font-size:44px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;">--</span><div style="font-size:12px; opacity:.75; margin-top:4px;">ساعات</div></div>
+      <div style="font-size:34px; color:var(--gold); opacity:.6;">:</div>
+      <div style="text-align:center;"><span id="r-cd-mins" style="font-size:44px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;">--</span><div style="font-size:12px; opacity:.75; margin-top:4px;">دقائق</div></div>
+      <div style="font-size:34px; color:var(--gold); opacity:.6;">:</div>
+      <div style="text-align:center;"><span id="r-cd-secs" style="font-size:44px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;">--</span><div style="font-size:12px; opacity:.75; margin-top:4px;">ثواني</div></div>
+    </div>
+  </div>
+
   <main>
     <div class="legend">
       <span><span class="sw win"></span>ضمن أعلى 11 (فائز حاليًا)</span>
@@ -127,16 +137,6 @@
 <script>
 const N8N_BASE = "https://mazoon1.abdulonline.online/webhook";
 const POLL_MS = 30000;
-
-// المناصب الداخلية تُحسب تلقائيًا حسب ترتيب الأصوات بين الفائزين.
-// إعادة تعيين المناصب يدويًا بعد إعلان النتائج تحتاج تعديل بسيط هنا لاحقًا إذا احتجتموه.
-const POSITION_TITLES = [
-  "رئيس المجلس", "نائب الرئيس", "أمين السر", "أمين الصندوق"
-];
-function positionTitle(rank){
-  if (rank <= POSITION_TITLES.length) return POSITION_TITLES[rank-1];
-  return "عضو مجلس";
-}
 
 let lastOrder = []; // array of candidate ids in last rendered order, for FLIP animation
 
@@ -162,8 +162,7 @@ function buildRow(c, maxVotes){
     '<div class="bar-fill" style="width:' + pct + '%"></div>' +
     '<div class="rank">' + c.rank + '</div>' +
     '<img class="r-photo" src="' + c.photoUrl + '" alt="' + c.name + '" loading="lazy">' +
-    '<div class="r-info"><div class="r-name">' + c.name + '</div>' +
-    (c.isWinner ? '<div class="r-title">' + positionTitle(c.rank) + '</div>' : '') + '</div>' +
+    '<div class="r-info"><div class="r-name">' + c.name + '</div></div>' +
     '<div class="r-votes">' + c.votes + '</div>';
   return row;
 }
@@ -213,10 +212,41 @@ function render(data){
   });
 }
 
+let votingOpenAtMs = null;
+let waitTickInterval = null;
+function fmt2(n){ return String(n).padStart(2,'0'); }
+
+function showWaitBox(){
+  document.getElementById('waitBox').style.display = 'block';
+  document.querySelector('main').style.display = 'none';
+  if (!waitTickInterval) waitTickInterval = setInterval(tickWaitCountdown, 1000);
+  tickWaitCountdown();
+}
+function hideWaitBox(){
+  document.getElementById('waitBox').style.display = 'none';
+  document.querySelector('main').style.display = '';
+  if (waitTickInterval){ clearInterval(waitTickInterval); waitTickInterval = null; }
+}
+function tickWaitCountdown(){
+  if (!votingOpenAtMs) return;
+  const diff = votingOpenAtMs - Date.now();
+  if (diff <= 0){ hideWaitBox(); tick(); return; }
+  const totalSeconds = Math.floor(diff/1000);
+  document.getElementById('r-cd-hours').textContent = fmt2(Math.floor(totalSeconds/3600));
+  document.getElementById('r-cd-mins').textContent = fmt2(Math.floor((totalSeconds%3600)/60));
+  document.getElementById('r-cd-secs').textContent = fmt2(totalSeconds%60);
+}
+
 async function tick(){
   try{
     const data = await fetchResults();
-    render(data);
+    votingOpenAtMs = data.votingOpenAt ? new Date(data.votingOpenAt).getTime() : null;
+    if (votingOpenAtMs && Date.now() < votingOpenAtMs){
+      showWaitBox();
+    } else {
+      hideWaitBox();
+      render(data);
+    }
   } catch(e){
     console.error('results fetch failed', e);
   }
