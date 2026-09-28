@@ -136,6 +136,7 @@
     <span><span class="live-dot"></span>مباشر</span>
     <span id="totalVotesLabel">إجمالي الأصوات: --</span>
     <span id="updatedLabel">آخر تحديث: --</span>
+    <span id="closeBar" style="display:none;">التصويت ينتهي خلال <span style="font-variant-numeric:tabular-nums; font-weight:800; color:var(--gold); direction:ltr; display:inline-block;"><span id="rc-hours">--</span>:<span id="rc-mins">--</span>:<span id="rc-secs">--</span></span></span>
   </div>
 
   <div id="waitBox" style="display:none; width:100%;">
@@ -346,16 +347,44 @@ function tickWaitCountdown(){
   document.getElementById('cd-secs').textContent = fmt2(totalSeconds%60);
 }
 
+let votingCloseAtMs = null;
+let closeTickInterval = null;
+function tickCloseCountdown(){
+  if (!votingCloseAtMs) return;
+  const diff = votingCloseAtMs - Date.now();
+  if (diff <= 0){ stopCloseBar(); return; }
+  const totalSeconds = Math.floor(diff/1000);
+  document.getElementById('rc-hours').textContent = fmt2(Math.floor(totalSeconds/3600));
+  document.getElementById('rc-mins').textContent = fmt2(Math.floor((totalSeconds%3600)/60));
+  document.getElementById('rc-secs').textContent = fmt2(totalSeconds%60);
+}
+function startCloseBar(){
+  document.getElementById('closeBar').style.display = 'inline';
+  tickCloseCountdown();
+  if (!closeTickInterval) closeTickInterval = setInterval(tickCloseCountdown, 1000);
+}
+function stopCloseBar(){
+  if (closeTickInterval){ clearInterval(closeTickInterval); closeTickInterval = null; }
+  document.getElementById('closeBar').style.display = 'none';
+}
+
 async function tick(){
   try{
     const data = await fetchResults();
     votingOpenAtMs = data.votingOpenAt ? new Date(data.votingOpenAt).getTime() : null;
+    votingCloseAtMs = data.votingCloseAt ? new Date(data.votingCloseAt).getTime() : null;
     if (votingOpenAtMs && Date.now() < votingOpenAtMs){
       RING_CANDS = (data.results || []).map(c => ({ name: c.name, photoUrl: c.photoUrl }));
+      stopCloseBar();
       showWaitBox();
     } else {
       hideWaitBox();
       render(data);
+      if (votingCloseAtMs && Date.now() < votingCloseAtMs){
+        startCloseBar();
+      } else {
+        stopCloseBar();
+      }
     }
   } catch(e){
     console.error('results fetch failed', e);

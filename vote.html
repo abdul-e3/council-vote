@@ -40,6 +40,8 @@
   .kicker{font-size: clamp(11px,1.4vmin,14px); letter-spacing:.1em; color:var(--gold-soft); opacity:.85; margin:0 0 4px; font-weight:600;}
   .lang-toggle{position:fixed; top:12px; inset-inline-end:12px; z-index:50; background:rgba(212,175,55,0.12); border:1px solid rgba(212,175,55,0.5); color:var(--gold-soft); font-family:inherit; font-weight:700; font-size:12px; padding:6px 16px; border-radius:999px; cursor:pointer;}
   .lang-toggle:hover{background:rgba(212,175,55,0.22);}
+  .close-banner{display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; margin:0 0 12px; padding:8px 16px; background:rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.35); border-radius:999px; font-size:13px; color:var(--gold-soft); font-weight:600;}
+  .close-banner .close-time{font-variant-numeric:tabular-nums; font-weight:800; color:var(--gold); direction:ltr;}
   h1{
     font-family:'Amiri',serif; font-weight:700;
     font-size: clamp(18px,3vmin,30px); line-height:1.35; margin:0 auto; max-width:60ch;
@@ -172,6 +174,10 @@
 
     <!-- ===== Phase B: voting form ===== -->
     <div id="phaseVote" style="width:100%; display:none;">
+      <div class="close-banner" id="closeBanner" style="display:none;">
+        <span id="closeLabel">التصويت ينتهي خلال</span>
+        <span class="close-time"><span id="close-hours">--</span>:<span id="close-mins">--</span>:<span id="close-secs">--</span></span>
+      </div>
       <div class="panel" id="idPanel">
         <h2 id="loginTitle">تسجيل الدخول للتصويت</h2>
         <p class="sub" id="loginSub">أدخل رقمك الجامعي للتحقق من هويتك</p>
@@ -229,6 +235,7 @@ const I18N = {
     mainTitle: 'انتخابات المجلس الإستشاري الطلابي للعام الأكاديمي 2026-2027',
     cdLabel: 'التصويت يبدأ خلال',
     cdHours: 'ساعات', cdMins: 'دقائق', cdSecs: 'ثواني',
+    closeLabel: 'التصويت ينتهي خلال',
     loginTitle: 'تسجيل الدخول للتصويت',
     loginSub: 'أدخل رقمك الجامعي للتحقق من هويتك',
     idPlaceholder: 'الرقم الجامعي',
@@ -267,6 +274,7 @@ const I18N = {
     mainTitle: 'Student Advisory Council Elections — Academic Year 2026-2027',
     cdLabel: 'Voting starts in',
     cdHours: 'Hours', cdMins: 'Minutes', cdSecs: 'Seconds',
+    closeLabel: 'Voting closes in',
     loginTitle: 'Login to Vote',
     loginSub: 'Enter your Student ID to verify your identity',
     idPlaceholder: 'Student ID',
@@ -314,6 +322,7 @@ function applyLang(){
   setText('cdUnitHours', t.cdHours);
   setText('cdUnitMins', t.cdMins);
   setText('cdUnitSecs', t.cdSecs);
+  setText('closeLabel', t.closeLabel);
   setText('loginTitle', t.loginTitle);
   setText('loginSub', t.loginSub);
   const idInput = document.getElementById('studentIdInput');
@@ -376,13 +385,16 @@ function computePhase(){
 function renderPhase(){
   const phase = computePhase();
   if (phase === "wait"){
+    stopCloseCountdown();
     show("phaseWait");
     startCountdown();
   } else if (phase === "vote"){
     stopCountdownRing();
     show("phaseVote");
+    startCloseCountdown();
   } else {
     stopCountdownRing();
+    stopCloseCountdown();
     show("phaseClosed");
   }
 }
@@ -472,6 +484,30 @@ function startCountdown(){
 }
 function stopCountdownRing(){
   if (window._cdInterval) { clearInterval(window._cdInterval); window._cdInterval = null; }
+}
+
+let closeTickInterval = null;
+function tickCloseCountdown(){
+  const closeAt = SETTINGS.VotingCloseAt ? new Date(SETTINGS.VotingCloseAt).getTime() : null;
+  if (!closeAt) return;
+  const diff = closeAt - Date.now();
+  if (diff <= 0){ stopCloseCountdown(); renderPhase(); return; }
+  const totalSeconds = Math.floor(diff/1000);
+  document.getElementById('close-hours').textContent = fmt(Math.floor(totalSeconds/3600));
+  document.getElementById('close-mins').textContent = fmt(Math.floor((totalSeconds%3600)/60));
+  document.getElementById('close-secs').textContent = fmt(totalSeconds%60);
+}
+function startCloseCountdown(){
+  const banner = document.getElementById('closeBanner');
+  if (!SETTINGS.VotingCloseAt){ banner.style.display = 'none'; return; }
+  banner.style.display = 'flex';
+  tickCloseCountdown();
+  if (!closeTickInterval) closeTickInterval = setInterval(tickCloseCountdown, 1000);
+}
+function stopCloseCountdown(){
+  if (closeTickInterval){ clearInterval(closeTickInterval); closeTickInterval = null; }
+  const banner = document.getElementById('closeBanner');
+  if (banner) banner.style.display = 'none';
 }
 function tickCountdown(){
   const openAt = new Date(SETTINGS.VotingOpenAt).getTime();
